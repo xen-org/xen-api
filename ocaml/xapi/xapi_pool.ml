@@ -2042,7 +2042,7 @@ let management_reconfigure ~__context ~network =
     Client.Host.management_reconfigure ~rpc ~session_id
       ~pif:(Hashtbl.find hosts_with_pifs host)
   in
-  Xapi_pool_helpers.call_fn_on_slaves_then_master ~__context f ;
+  Xapi_pool_helpers.call_fn_on_members_main_last ~__context f ;
   (* Perform Pool.recover_slaves *)
   let hosts_recovered =
     Helpers.call_api_functions ~__context (fun rpc session_id ->
@@ -2457,11 +2457,11 @@ let call_fn_on_host ~__context f host =
   )
 
 let enable_binary_storage ~__context =
-  Xapi_pool_helpers.call_fn_on_slaves_then_master ~__context
+  Xapi_pool_helpers.call_fn_on_members_main_last ~__context
     Client.Host.enable_binary_storage
 
 let disable_binary_storage ~__context =
-  Xapi_pool_helpers.call_fn_on_slaves_then_master ~__context
+  Xapi_pool_helpers.call_fn_on_members_main_last ~__context
     Client.Host.disable_binary_storage
 
 let initialize_wlb ~__context ~wlb_url ~wlb_username ~wlb_password
@@ -2504,16 +2504,20 @@ let revalidate_subjects ~__context =
       a best-effort attempt to disable any hosts who had their external auth successfully enabled before the failure occured
 *)
 let enable_external_auth ~__context ~pool ~config ~service_name ~auth_type =
-  (* CP-825: Serialize execution of pool-enable-extauth and pool-disable-extauth *)
-  (* enabling/disabling the pool's extauth at the same time could produce inconsistent states for extauth in each host of the pool *)
+  (* CP-825: Serialize execution of pool-enable-extauth and
+     pool-disable-extauth enabling/disabling the pool's extauth at the same
+     time could produce inconsistent states for extauth in each host of the
+     pool *)
   Threadext.Mutex.execute Xapi_globs.serialize_pool_enable_disable_extauth
     (fun () ->
-      (* the first element in the hosts list needs to be the pool's master, because we *)
-      (* always want to update first the master's record due to homogeneity checks in CA-24856 *)
-      let hosts = Xapi_pool_helpers.get_master_slaves_list ~__context in
-      (* 1. verifies if any of the pool hosts already have external auth enabled, and fails if so *)
-      (* this step isn't strictly necessary, since we will anyway fail in (2) if that is the case, but *)
-      (* it avoids unnecessary network roundtrips in the pool *)
+      (* The first element in the hosts list needs to be the pool's master, as
+         its record needs to be updated first due to homogeneity checks in
+         CA-24856 *)
+      let hosts = Xapi_pool_helpers.get_members_main_first ~__context in
+      (* 1. Verifies if any of the pool hosts already have external auth
+         enabled, and fails if so. This step isn't strictly necessary, since
+         (2) will fail anyway if that is the case, but it avoids unnecessary
+         network roundtrips in the pool *)
       try
         let is_external_auth_enabled host =
           Db.Host.get_external_auth_type ~__context ~self:host <> ""
@@ -2686,13 +2690,16 @@ let enable_external_auth ~__context ~pool ~config ~service_name ~auth_type =
     * Guarantees to call Host.disable_external_auth() on every pool host, regardless of whether some of these calls fail
 *)
 let disable_external_auth ~__context ~pool ~config =
-  (* CP-825: Serialize execution of pool-enable-extauth and pool-disable-extauth *)
-  (* enabling/disabling the pool's extauth at the same time could produce inconsistent states for extauth in each host of the pool *)
+  (* CP-825: Serialize execution of pool-enable-extauth and
+      pool-disable-extauth enabling/disabling the pool's extauth at the same
+      time could produce inconsistent states for extauth in each host of the
+      pool *)
   Threadext.Mutex.execute Xapi_globs.serialize_pool_enable_disable_extauth
     (fun () ->
-      (* the first element in the hosts list needs to be the pool's master, because we *)
-      (* always want to update first the master's record due to homogeneity checks in CA-24856 *)
-      let hosts = Xapi_pool_helpers.get_master_slaves_list ~__context in
+      (* The first element in the hosts list needs to be the pool's main host,
+         as its record needs to be updated first due to homogeneity checks in
+         CA-24856 *)
+      let hosts = Xapi_pool_helpers.get_members_main_first ~__context in
       let host_msgs_list =
         List.map
           (fun host ->
@@ -2763,15 +2770,14 @@ let disable_external_auth ~__context ~pool ~config =
 (* CA-24856: detect non-homogeneous external-authentication config in pool *)
 let detect_nonhomogeneous_external_auth_in_pool ~__context =
   Helpers.call_api_functions ~__context (fun rpc session_id ->
-      let slaves = Xapi_pool_helpers.get_slaves_list ~__context in
+      let _, subs = Xapi_pool_helpers.get_members ~__context in
+      (* Avoid checking homogeneity on the main host, it's not needed and it
+         would create and infinite loop *)
       List.iter
-        (fun slave ->
-          (* check every *slave* in the pool... (the master is always homogeneous to the pool by definition) *)
-          (* (also, checking the master inside this function would create an infinite recursion loop) *)
-          Xapi_host.detect_nonhomogeneous_external_auth_in_host ~__context
-            ~host:slave
+        (fun host ->
+          Xapi_host.detect_nonhomogeneous_external_auth_in_host ~__context ~host
           )
-        slaves
+        subs
   )
 
 let run_detect_nonhomogeneous_external_auth_in_pool () =

@@ -78,7 +78,7 @@ let try_create_sr_from_record ~__context ~_type ~device_config ~dr_task
       in
       try
         (* Create and plug PBDs. *)
-        Xapi_pool_helpers.call_fn_on_master_then_slaves ~__context
+        Xapi_pool_helpers.call_fn_on_members_main_first ~__context
           (fun ~rpc ~session_id ~host ->
             debug "Attaching SR %s to host %s" sr_record.uuid
               (Db.Host.get_name_label ~__context ~self:host) ;
