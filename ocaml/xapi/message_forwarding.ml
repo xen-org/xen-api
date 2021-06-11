@@ -983,7 +983,7 @@ functor
           (current_pool_uuid ~__context) ;
         let self = Helpers.get_pool ~__context in
         let local_fn = Local.Pool.enable_tls_verification in
-        let all_hosts = Xapi_pool_helpers.get_master_slaves_list ~__context in
+        let all_hosts = Xapi_pool_helpers.get_members_main_first ~__context in
 
         Xapi_pool_helpers.with_pool_operation ~__context
           ~doc:"Pool.enable_tls_verification" ~self ~op:`tls_verification_enable

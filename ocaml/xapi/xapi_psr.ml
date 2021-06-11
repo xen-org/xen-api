@@ -543,7 +543,7 @@ let start =
     let assert_all_hosts_alive () =
       let live_hosts = Helpers.get_live_hosts ~__context |> HostSet.of_list in
       let all_hosts_list =
-        Xapi_pool_helpers.get_master_slaves_list ~__context
+        Xapi_pool_helpers.get_members_main_first ~__context
       in
       let all_hosts = all_hosts_list |> HostSet.of_list in
       let offline_hosts = HostSet.diff all_hosts live_hosts in
