@@ -378,15 +378,45 @@ let exchange_certificates_among_all_members ~__context =
     collect_pool_certs ~__context ~rpc ~session_id ~from_hosts:all_hosts
       ~map:Fun.id
   in
-  List.iter
-    (fun host ->
-      Worker.remote_write_certs_fs HostPoolCertificate Erase_old certs host rpc
-        session_id
-      )
-    all_hosts ;
-  List.iter
-    (fun host -> Worker.remote_regen_bundle host rpc session_id)
-    all_hosts
+  let operations =
+    List.concat
+      [
+        List.map
+          (fun host () ->
+            Worker.remote_write_certs_fs HostPoolCertificate Erase_old certs
+              host rpc session_id
+            )
+          all_hosts
+      ; List.map
+          (fun host () -> Worker.remote_regen_bundle host rpc session_id)
+          all_hosts
+      ]
+  in
+  let operations =
+    (* if there is a fist point, throw an error at a random point *)
+    if Xapi_fist.exchange_certificates_among_all_members () then
+      let rand_i = Random.int (List.length operations) in
+      let throw_op () =
+        raise
+          Api_errors.(
+            Server_error
+              (internal_error, ["exchange_certificates_among_all_members fist!"])
+          )
+      in
+      List.fold_left
+        (fun (i, acc) x ->
+          if i = rand_i then
+            (i + 1, x :: throw_op :: acc)
+          else
+            (i + 1, x :: acc)
+          )
+        (0, []) operations
+      |> snd
+      |> List.rev
+    else
+      operations
+  in
+  List.iter (fun f -> f ()) operations
 
 let ( (get_local_ca_certs : unit -> WireProtocol.certificate_file list)
     , (get_local_pool_certs : unit -> WireProtocol.certificate_file list) ) =

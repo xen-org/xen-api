@@ -122,3 +122,6 @@ let hang_psr psr_checkpoint =
       "psr_cleanup"
   )
   |> hang_while
+
+let exchange_certificates_among_all_members () =
+  fistpoint "exchange_certificates_among_all_members"
