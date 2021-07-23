@@ -124,8 +124,4 @@ let hang_psr psr_checkpoint =
   |> hang_while
 
 let exchange_certificates_among_all_members () =
-  let name = "exchange_certificates_among_all_members" in
-  if fistpoint name then
-    Some (fun () -> hang_while name)
-  else
-    None
+  fistpoint "exchange_certificates_among_all_members"

@@ -393,20 +393,28 @@ let exchange_certificates_among_all_members ~__context =
       ]
   in
   let operations =
-    (* insert a hang op randomly if there is a fist point *)
-    Xapi_fist.exchange_certificates_among_all_members ()
-    |> Option.map @@ fun hang_op ->
-       let rand_i = Random.int (List.length operations) in
-       List.fold_left
-         (fun (i, acc) x ->
-           if i = rand_i then
-             (i + 1, x :: hang_op :: acc)
-           else
-             (i + 1, x :: acc)
-           )
-         (0, []) operations
-       |> snd
-       |> List.rev
+    (* if there is a fist point, throw an error at a random point *)
+    if Xapi_fist.exchange_certificates_among_all_members () then
+      let rand_i = Random.int (List.length operations) in
+      let throw_op () =
+        raise
+          Api_errors.(
+            Server_error
+              (internal_error, ["exchange_certificates_among_all_members fist!"])
+          )
+      in
+      List.fold_left
+        (fun (i, acc) x ->
+          if i = rand_i then
+            (i + 1, x :: throw_op :: acc)
+          else
+            (i + 1, x :: acc)
+          )
+        (0, []) operations
+      |> snd
+      |> List.rev
+    else
+      operations
   in
   List.iter (fun f -> f ()) operations
 
