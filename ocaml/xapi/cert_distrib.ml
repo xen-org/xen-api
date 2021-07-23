@@ -392,6 +392,22 @@ let exchange_certificates_among_all_members ~__context =
           all_hosts
       ]
   in
+  let operations =
+    (* insert a hang op randomly if there is a fist point *)
+    Xapi_fist.exchange_certificates_among_all_members ()
+    |> Option.map @@ fun hang_op ->
+       let rand_i = Random.int (List.length operations) in
+       List.fold_left
+         (fun (i, acc) x ->
+           if i = rand_i then
+             (i + 1, x :: hang_op :: acc)
+           else
+             (i + 1, x :: acc)
+           )
+         (0, []) operations
+       |> snd
+       |> List.rev
+  in
   List.iter (fun f -> f ()) operations
 
 let ( (get_local_ca_certs : unit -> WireProtocol.certificate_file list)
